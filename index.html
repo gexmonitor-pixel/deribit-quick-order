@@ -2129,35 +2129,6 @@ function renderAll() {
         `;
       });
     }
-
-          state.payload = payload;
-      state.expiry = (payload && payload.snapshot && payload.snapshot.expiry) || state.expiry;
-      renderAssets();
-      renderOptionTypeMode();
-      renderTradeIntentMode();
-      renderQuoteUnitMode();
-      renderExpiries(payload.expiries || []);
-      renderAmountPresets();
-      renderTradeCards(payload);
-      renderOpenOrders(payload);
-      renderPositions(payload);
-      renderTradeHistory(payload);
-      if (payload.account) {
-        const eq = Number(payload.account.equity || 0);
-        const cur = payload.account.currency || 'BTC';
-        const spotPrice = Number((payload && payload.snapshot && payload.snapshot.spot_price) || 0);
-        const eqUsd = eq * spotPrice;
-        const el = document.getElementById('accountEquity');
-        if (el) {
-          el.innerHTML = `账户权益: ${fmt(eq)} ${cur} <span style="opacity:0.7;font-weight:400;margin-left:4px;">(${fmtUsd(eqUsd)})</span>`;
-          el.style.display = 'block';
-        }
-      }
-      const pExpiry = (payload && payload.snapshot && payload.snapshot.expiry) || '--';
-      setStatus('info', `已加载 ${pExpiry}，当前模式 ${state.optionType === 'call' ? '看涨' : '看跌'} / ${state.executionMode === 'take_ask' ? '吃卖一' : (state.executionMode === 'mark_clip' ? '贴标记' : '挂买一')}。`);
-      scheduleAutoRefresh();
-    }
-
     amountInput.addEventListener('change', () => setAmount(amountInput.value || 1));
     reduceOnly.addEventListener('change', () => {
       state.reduceOnly = reduceOnly.checked;
