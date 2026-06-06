@@ -741,7 +741,7 @@
         <input type="password" id="clientSecretInput" placeholder="输入您的 Deribit Client Secret" />
       </div>
       <div class="message info" style="font-size:12px; margin-top:8px;">
-        🔐 您的密钥将仅保存在您本地浏览器的缓存中，绝不会上传至任何服务器。<br/>本看板是纯本地运行的客户端工具。
+        🔐 您的密钥将仅保存在您本地浏览器的缓存中，绝不会发送给 GEXmonitor 或任何第三方服务器，仅用于向 Deribit 官方发起签名与鉴权请求。<br/>本看板是 100% 开源的纯本地运行客户端工具。
       </div>
       <button class="action buy" id="saveSettingsBtn" style="margin-top:10px;">保存并连接</button>
     </div>
@@ -975,6 +975,16 @@ function safeGetItem(key, def) {
 }
 function safeSetItem(key, val) {
   try { if (window.localStorage) window.localStorage.setItem(key, val); } catch (e) {}
+}
+
+function escapeHTML(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 const state = {
@@ -1809,7 +1819,7 @@ function renderAccountEquity(payload) {
       orders.forEach((order) => {
         const tr = document.createElement('tr');
         tr.innerHTML = `
-          <td>${order.instrument_name}</td>
+          <td>${escapeHTML(order.instrument_name)}</td>
           <td>${String(order.direction || '').toUpperCase()}</td>
           <td>${fmtNum(order.amount)}</td>
           <td>${fmt(order.price)}</td>
@@ -1871,7 +1881,7 @@ function renderAccountEquity(payload) {
 
         const tr = document.createElement('tr');
         tr.innerHTML = `
-            <td>${pos.instrument_name}</td>
+            <td>${escapeHTML(pos.instrument_name)}</td>
             <td>${String(pos.direction || '').toUpperCase()}</td>
             <td>${fmtNum(pos.size)}</td>
             <td>${fmt(pos.average_price)}</td>
@@ -2078,11 +2088,14 @@ function renderAccountEquity(payload) {
         const params = {
           instrument_name: instrument,
           amount: size,
-          type: 'limit',
-          price: p,
+          type: isTaker ? 'market' : 'limit',
+          time_in_force: isTaker ? 'immediate_or_cancel' : 'good_til_cancelled',
           post_only: !isTaker && !isMarkClip,
           reduce_only: true
         };
+        if (!isTaker) {
+          params.price = p;
+        }
         
         let payload;
         try {
@@ -2168,7 +2181,7 @@ function renderAccountEquity(payload) {
         const ts = t.timestamp ? new Date(t.timestamp).toLocaleString('zh-CN', {month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}) : '--';
         tradeHistoryRows.innerHTML += `
           <tr>
-            <td>${t.instrument_name || '--'}</td>
+            <td>${escapeHTML(t.instrument_name || '--')}</td>
             <td>${String(t.direction || '').toUpperCase()}</td>
             <td>${fmtNum(t.amount)}</td>
             <td>${fmt(t.price)} <span class="small">(${fmtUsd(priceUsd)})</span></td>
