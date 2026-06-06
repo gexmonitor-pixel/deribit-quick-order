@@ -1391,7 +1391,8 @@ function renderAccountEquity(payload) {
 
     function roundAmount(value) {
       const rounded = Math.round(Number(value || 0) * 10) / 10;
-      return rounded > 0 ? rounded : 0.1;
+      const minAmount = state.asset === 'ETH' ? 1 : 0.1;
+      return rounded >= minAmount ? rounded : minAmount;
     }
 
     function setAmount(nextAmount) {
@@ -1781,7 +1782,7 @@ function renderAccountEquity(payload) {
 
       if (!selected) {
         mobileSelectionTitle.textContent = '请选择一个卡片';
-        mobileSelectionMeta.textContent = `当前模式 ${state.optionType === 'call' ? '看涨' : '看跌'} / ${state.executionMode === 'take_ask' ? '吃卖一' : (state.executionMode === 'mark_clip' ? '贴标记' : '挂买一')}`;
+        mobileSelectionMeta.textContent = `当前模式 ${state.optionType === 'call' ? '看涨' : '看跌'} / ${state.executionMode === 'take_ask' ? '吃卖一' : (state.executionMode === 'optimal' ? '最优价' : (state.executionMode === 'mark_clip' ? '贴标记' : '挂买一'))}`;
         mobileSelectionPrice.textContent = '--';
         mobileSelectionInfo.innerHTML = '';
         mobileSelectionEmpty.style.display = 'block';
@@ -1792,7 +1793,7 @@ function renderAccountEquity(payload) {
 
       const details = getSelectionDetails(selected.sideData);
       mobileSelectionTitle.textContent = selected.sideData.instrument_name;
-      mobileSelectionMeta.textContent = `${selected.strike} | ${state.executionMode === 'take_ask' ? '吃卖一' : (state.executionMode === 'mark_clip' ? '贴标记' : '挂买一')} | ${state.expiry || '--'}`;
+      mobileSelectionMeta.textContent = `${selected.strike} | ${state.executionMode === 'take_ask' ? '吃卖一' : (state.executionMode === 'optimal' ? '最优价' : (state.executionMode === 'mark_clip' ? '贴标记' : '挂买一'))} | ${state.expiry || '--'}`;
       mobileSelectionPrice.textContent = details.primaryDisplay.primary;
       mobileSelectionEmpty.style.display = 'none';
       const spotPrice = Number((state.payload && state.payload.snapshot && state.payload.snapshot.spot_price) || 0);
@@ -1810,7 +1811,7 @@ function renderAccountEquity(payload) {
       `;
       mobileBuyBtn.disabled = false;
       mobileBuyBtn.className = `action ${state.executionMode}`;
-      mobileBuyBtn.textContent = state.executionMode === 'take_ask' ? '买入吃卖一' : (state.executionMode === 'mark_clip' ? '买入贴标记' : '买入挂买一');
+      mobileBuyBtn.textContent = state.executionMode === 'take_ask' ? '买入吃卖一' : (state.executionMode === 'optimal' ? '买入最优价' : (state.executionMode === 'mark_clip' ? '买入贴标记' : '买入挂买一'));
       
       mobileBuyBtn.onclick = () => {
         submitOrder(selected.sideData.instrument_name, 'buy', details.activeRefPrice, state.executionMode);
