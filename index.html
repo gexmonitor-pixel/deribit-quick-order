@@ -1421,7 +1421,16 @@ function renderAccountEquity(payload) {
           state.asset = asset;
           safeSetItem('qo_asset', asset);
           state.expiry = '';
+          
+          // Set default minimum amount based on asset
+          const defaultAmount = asset === 'ETH' ? 1 : 0.1;
+          state.amount = defaultAmount;
+          safeSetItem('qo_amount', defaultAmount);
+          amountInput.value = defaultAmount;
+          mobileAmountValue.textContent = fmtNum(defaultAmount);
+          
           renderAssets();
+          renderAmountPresets();
           renderExpiries([]);
           setStatus('info', `切换到 ${asset}，正在刷新...`);
           await loadData();
@@ -1480,7 +1489,8 @@ function renderAccountEquity(payload) {
       const renderPresetGroup = (container) => {
         if (!container) return;
         container.innerHTML = '';
-        AMOUNT_PRESETS.forEach((preset) => {
+        const presets = state.asset === 'ETH' ? [1, 20, 50, 100, 500, 1000] : [0.1, 1, 2, 5, 10];
+        presets.forEach((preset) => {
           container.appendChild(button(String(preset), state.amount === preset, () => {
             setAmount(preset);
           }));
@@ -2207,7 +2217,6 @@ function renderAccountEquity(payload) {
     });
     mobileRefreshBtn.addEventListener('click', () => loadData());
 
-    const AMOUNT_PRESETS = [0.1, 1, 2, 5, 10];
     setAmount(state.amount);
     reduceOnly.checked = state.reduceOnly;
     mobileReduceOnly.checked = state.reduceOnly;
