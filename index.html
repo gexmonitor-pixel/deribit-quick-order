@@ -1871,10 +1871,12 @@ function renderAccountEquity(payload) {
       if (!closeState) return;
       const pricesEl = document.getElementById('closeModalPrices');
       try {
-        const res = await fetch(`/api/quote?instrument=${closeState.instrument}`);
-        // payload from ws
-        if (payload.success) {
-          const { bid, ask, mark, index } = payload;
+        const res = await api.request('public/ticker', { instrument_name: closeState.instrument });
+        if (res) {
+          const bid = res.best_bid_price || 0;
+          const ask = res.best_ask_price || 0;
+          const mark = res.mark_price || 0;
+          const index = res.index_price || 0;
           const bidDisp = formatDisplay(bid, index);
           const markDisp = formatDisplay(mark, index);
           const askDisp = formatDisplay(ask, index);
@@ -2033,20 +2035,30 @@ function renderAccountEquity(payload) {
       buttons.forEach(b => b.disabled = true);
 
       try {
-        const res = await fetch('/api/close-position', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            instrument: instrument,
-            side: closeSide,
-            amount: size,
-            execution_mode: executionMode
-          })
-        });
-        // payload from ws
+        let p = 0;
+        let isTaker = false;
+        let isMarkClip = false;
+        if (executionMode === 'maker') p = Number(document.getElementById('closePriceMaker').textContent.replace(/,/g, ''));
+        if (executionMode === 'mark_clip') { p = Number(document.getElementById('closePriceMark').textContent.replace(/,/g, '')); isMarkClip = true; }
+        if (executionMode === 'optimal') p = Number(document.getElementById('closePriceOptimal').textContent.replace(/,/g, ''));
+        if (executionMode === 'taker') { p = Number(document.getElementById('closePriceTaker').textContent.replace(/,/g, '')); isTaker = true; }
         
-        if (!payload || payload.error) {
-          setStatus('error', payload.error || `平仓失败 (${res.status})`);
+        const isBuy = closeSide === 'buy';
+        const method = isBuy ? 'private/buy' : 'private/sell';
+        const params = {
+          instrument_name: instrument,
+          amount: size,
+          type: 'limit',
+          price: p,
+          post_only: !isTaker && !isMarkClip,
+          reduce_only: true
+        };
+        
+        let payload;
+        try {
+          payload = await api.request(method, params);
+        } catch(e) {
+          setStatus('error', e.message || `平仓失败`);
           soundOrderError();
           buttons.forEach(b => b.disabled = false);
           return;
@@ -2096,13 +2108,8 @@ function renderAccountEquity(payload) {
       btn.disabled = true;
       btn.textContent = '撤单中...';
       try {
-        const res = await fetch('/api/cancel', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ order_id: orderId }),
-        });
-        // payload from ws
-        if (payload.success) {
+        await api.request('private/cancel', { order_id: orderId });
+        if (true) {
            soundOrderCancelled();
            setStatus('info', `已撤销平仓单`);
            document.getElementById('closeSetupSection').style.display = 'block';
