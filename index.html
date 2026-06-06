@@ -1071,7 +1071,7 @@ function parseExpiryTs(expiryStr) {
 
 async function buildSnapshot() {
   const nowMs = getMs();
-  const indexRes = await api.request('public/get_index_price', { index_name: `unix_${state.asset}` });
+  const indexRes = await api.request('public/get_index_price', { index_name: `${state.asset.toLowerCase()}_usd` });
   const spot = indexRes.index_price;
 
   const insts = await api.request('public/get_instruments', { currency: state.asset, kind: 'option', expired: false });
