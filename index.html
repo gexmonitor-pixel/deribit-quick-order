@@ -1711,11 +1711,11 @@ function renderAccountEquity(payload) {
         amount: Number(amountInput.value || state.amount || 1),
         type: isTaker ? 'market' : 'limit',
         time_in_force: isTaker ? 'immediate_or_cancel' : 'good_til_cancelled',
-        post_only: isJoin,
         reduce_only: reduceOnly.checked,
       };
       if (params.type === 'limit') {
          params.price = price;
+         if (isJoin) params.post_only = true;
       }
       
       try {
@@ -2100,11 +2100,11 @@ function renderAccountEquity(payload) {
           amount: size,
           type: isTaker ? 'market' : 'limit',
           time_in_force: isTaker ? 'immediate_or_cancel' : 'good_til_cancelled',
-          post_only: !isTaker && !isMarkClip,
           reduce_only: true
         };
         if (!isTaker) {
           params.price = p;
+          if (!isMarkClip) params.post_only = true;
         }
         
         let payload;
