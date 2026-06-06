@@ -1204,6 +1204,21 @@ function renderAll() {
   renderOpenOrders(state.payload);
   renderPositions(state.payload);
   renderTradeHistory(state.payload);
+  renderAccountEquity(state.payload);
+}
+
+function renderAccountEquity(payload) {
+  if (payload && payload.account) {
+    const eq = Number(payload.account.equity || 0);
+    const cur = payload.account.currency || 'BTC';
+    const spotPrice = Number((payload && payload.snapshot && payload.snapshot.spot_price) || 0);
+    const eqUsd = eq * spotPrice;
+    const el = document.getElementById('accountEquity');
+    if (el) {
+      el.innerHTML = `账户权益: ${fmt(eq)} ${cur} <span style="opacity:0.7;font-weight:400;margin-left:4px;">(${fmtUsd(eqUsd)})</span>`;
+      el.style.display = 'block';
+    }
+  }
 }
 
 
