@@ -1163,6 +1163,7 @@ async function loadData() {
     const account = await api.request('private/get_account_summary', { currency: state.asset, extended: true });
     const openOrders = await api.request('private/get_open_orders_by_currency', { currency: state.asset, kind: 'option' });
     const positions = await api.request('private/get_positions', { currency: state.asset, kind: 'option' });
+    const tradeHistory = await api.request('private/get_user_trades_by_currency', { currency: state.asset, kind: 'option', count: 50 });
     
     const payload = {
       success: true,
@@ -1176,7 +1177,8 @@ async function loadData() {
         margin_balance: account.margin_balance
       },
       open_orders: openOrders,
-      positions: positions.filter(p => Math.abs(p.size) > 0)
+      positions: positions.filter(p => Math.abs(p.size) > 0),
+      trade_history: tradeHistory ? tradeHistory.trades : []
     };
     
     state.payload = payload;
