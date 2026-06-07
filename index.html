@@ -881,7 +881,7 @@
           🌐 访问主站
         </a>
         <a href="https://t.me/Ljbp1008" target="_blank" rel="noopener noreferrer" style="color:var(--muted); text-decoration:none; margin:0 10px; transition:color 0.2s;">
-          ✈️ Telegram交流群
+          ✈️ Telegram联系
         </a>
         <a href="https://www.youtube.com/@gexmonitor" target="_blank" rel="noopener noreferrer" style="color:var(--muted); text-decoration:none; margin:0 10px; transition:color 0.2s;">
           ▶️ YouTube频道
@@ -1014,11 +1014,23 @@ class DeribitWS {
     this.authenticated = false;
     this._isTestnet = true;
     this._reconnectTimer = null;
+    this._heartbeatTimer = null;
+    this._connectPromise = null;
+    this._lastMessageAt = 0;
     this._intentionalClose = false;
     this._onSubscriptionHandler = null;
+    this._requestTimeoutMs = 15000;
   }
   
   async connect(isTestnet) {
+    if (this._connectPromise) return this._connectPromise;
+    this._connectPromise = this._openConnection(isTestnet).finally(() => {
+      this._connectPromise = null;
+    });
+    return this._connectPromise;
+  }
+
+  async _openConnection(isTestnet) {
     this._isTestnet = isTestnet;
     this._intentionalClose = false;
     if (this._reconnectTimer) {
@@ -1031,18 +1043,23 @@ class DeribitWS {
     }
     this.connected = false;
     this.authenticated = false;
+    this._stopHeartbeat();
     const url = isTestnet ? 'wss://test.deribit.com/ws/api/v2' : 'wss://www.deribit.com/ws/api/v2';
     
     return new Promise((resolve, reject) => {
-      this.ws = new WebSocket(url);
+      const socket = new WebSocket(url);
+      this.ws = socket;
       this._intentionalClose = false;
-      this.ws.onopen = async () => {
+      socket.onopen = async () => {
+        if (this.ws !== socket) return;
         this.connected = true;
+        this._lastMessageAt = Date.now();
         setStatus('info', 'WebSocket 已连接，正在鉴权...');
         if (state.clientId && state.clientSecret) {
           try {
             await this.auth();
             this.authenticated = true;
+            this._startHeartbeat();
             resolve();
           } catch(e) {
             this.authenticated = false;
@@ -1052,7 +1069,9 @@ class DeribitWS {
           reject(new Error("未配置 API Key"));
         }
       };
-      this.ws.onmessage = (msg) => {
+      socket.onmessage = (msg) => {
+        if (this.ws !== socket) return;
+        this._lastMessageAt = Date.now();
         const data = JSON.parse(msg.data);
         // Handle subscription push notifications
         if (data.method === 'subscription' && data.params) {
@@ -1071,12 +1090,15 @@ class DeribitWS {
           delete this.resolvers[data.id];
         }
       };
-      this.ws.onerror = (e) => {
+      socket.onerror = (e) => {
+        if (this.ws !== socket) return;
         if (!this.connected) reject(e);
       };
-      this.ws.onclose = () => {
+      socket.onclose = () => {
+        if (this.ws !== socket) return;
         this.connected = false;
         this.authenticated = false;
+        this._stopHeartbeat();
         // Reject all pending requests so callers don't hang
         for (const id of Object.keys(this.resolvers)) {
           this.resolvers[id].reject(new Error('WebSocket 连接已断开'));
@@ -1089,9 +1111,9 @@ class DeribitWS {
     });
   }
 
-  _scheduleReconnect() {
+  _scheduleReconnect(delayMs = 3000) {
     if (this._reconnectTimer) return;
-    setStatus('warn', '⚠️ 连接已断开，3 秒后自动重连...');
+    setStatus('warn', delayMs > 0 ? '⚠️ 连接已断开，3 秒后自动重连...' : '⚠️ 连接不可用，正在自动重连...');
     this._reconnectTimer = setTimeout(async () => {
       this._reconnectTimer = null;
       setStatus('info', '🔄 正在重新连接...');
@@ -1104,7 +1126,76 @@ class DeribitWS {
         console.error('Reconnect failed:', e);
         this._scheduleReconnect();
       }
-    }, 3000);
+    }, delayMs);
+  }
+
+  _startHeartbeat() {
+    this._stopHeartbeat();
+    this._heartbeatTimer = setInterval(async () => {
+      if (!state.clientId || !state.clientSecret) return;
+      if (!this.connected || !this.authenticated || !this.ws || this.ws.readyState !== WebSocket.OPEN) {
+        this._scheduleReconnect(0);
+        return;
+      }
+      try {
+        await this._sendRequest('public/get_time', {}, { timeoutMs: 8000 });
+      } catch(e) {
+        console.warn('Heartbeat failed:', e);
+        this._forceReconnect('⚠️ 连接心跳超时，正在自动重连...');
+      }
+    }, 25000);
+  }
+
+  _stopHeartbeat() {
+    if (this._heartbeatTimer) {
+      clearInterval(this._heartbeatTimer);
+      this._heartbeatTimer = null;
+    }
+  }
+
+  _rejectPendingRequests(message) {
+    for (const id of Object.keys(this.resolvers)) {
+      this.resolvers[id].reject(new Error(message));
+      delete this.resolvers[id];
+    }
+  }
+
+  _forceReconnect(message) {
+    if (message) setStatus('warn', message);
+    this.connected = false;
+    this.authenticated = false;
+    this._stopHeartbeat();
+    this._rejectPendingRequests('WebSocket 连接已断开');
+    const socket = this.ws;
+    this.ws = null;
+    if (socket) {
+      try { socket.close(); } catch(e) {}
+    }
+    if (state.clientId && state.clientSecret) {
+      this._scheduleReconnect(0);
+    }
+  }
+
+  async ensureConnected() {
+    if (!state.clientId || !state.clientSecret) {
+      throw new Error("未配置 API Key");
+    }
+    if (this.connected && this.authenticated && this.ws && this.ws.readyState === WebSocket.OPEN) {
+      return;
+    }
+    setStatus('info', '连接不可用，正在自动重连...');
+    await this.connect(this._isTestnet);
+  }
+
+  async ensureFreshConnection() {
+    await this.ensureConnected();
+    if (Date.now() - this._lastMessageAt < 20000) return;
+    try {
+      await this._sendRequest('public/get_time', {}, { timeoutMs: 5000 });
+    } catch(e) {
+      await this.connect(this._isTestnet);
+      await this._sendRequest('public/get_time', {}, { timeoutMs: 5000 });
+    }
   }
 
   disconnect() {
@@ -1113,17 +1204,49 @@ class DeribitWS {
       clearTimeout(this._reconnectTimer);
       this._reconnectTimer = null;
     }
+    this._stopHeartbeat();
     if (this.ws) {
       try { this.ws.close(); } catch(e) {}
     }
   }
 
-  request(method, params = {}) {
+  async request(method, params = {}, options = {}) {
+    if (!options.skipEnsure) {
+      await this.ensureConnected();
+    }
+    return this._sendRequest(method, params, options);
+  }
+
+  _sendRequest(method, params = {}, options = {}) {
     return new Promise((resolve, reject) => {
-      if (!this.connected) return reject(new Error("WebSocket 未连接"));
+      if (!this.connected || !this.ws || this.ws.readyState !== WebSocket.OPEN) return reject(new Error("WebSocket 未连接"));
       const id = this.msgId++;
-      this.resolvers[id] = { resolve, reject };
-      this.ws.send(JSON.stringify({ jsonrpc: "2.0", id, method, params }));
+      const timeoutMs = options.timeoutMs || this._requestTimeoutMs;
+      const timer = setTimeout(() => {
+        if (this.resolvers[id]) {
+          delete this.resolvers[id];
+          reject(new Error('WebSocket 请求超时，正在自动重连'));
+          this._forceReconnect('⚠️ 请求超时，正在自动重连...');
+        }
+      }, timeoutMs);
+      this.resolvers[id] = {
+        resolve: (result) => {
+          clearTimeout(timer);
+          resolve(result);
+        },
+        reject: (error) => {
+          clearTimeout(timer);
+          reject(error);
+        }
+      };
+      try {
+        this.ws.send(JSON.stringify({ jsonrpc: "2.0", id, method, params }));
+      } catch(e) {
+        clearTimeout(timer);
+        delete this.resolvers[id];
+        reject(e);
+        this._forceReconnect('⚠️ 发送失败，正在自动重连...');
+      }
     });
   }
 
@@ -1132,7 +1255,7 @@ class DeribitWS {
       grant_type: 'client_credentials',
       client_id: state.clientId,
       client_secret: state.clientSecret
-    });
+    }, { skipEnsure: true });
   }
 
   async subscribe(channels) {
@@ -1407,7 +1530,15 @@ async function setupSubscriptions() {
 }
 
 async function loadData() {
-  if (!api.authenticated) return;
+  if (!state.clientId || !state.clientSecret) return;
+  if (!api.authenticated) {
+    try {
+      await api.ensureConnected();
+    } catch(e) {
+      setStatus('error', `连接失败: ${e.message}`);
+      return;
+    }
+  }
   setStatus('info', '正在加载市场数据 ...');
   try {
     // Tear down previous subscriptions
@@ -1947,6 +2078,7 @@ function renderAccountEquity(payload) {
       if (isJoin) params.post_only = true;
       
       try {
+        await api.ensureFreshConnection();
         const payload = await api.request(`private/${side}`, params);
         const orderState = (payload && payload.order && payload.order.order_state) || '';
         if (orderState === 'filled') {
@@ -2338,6 +2470,7 @@ function renderAccountEquity(payload) {
         
         let payload;
         try {
+          await api.ensureFreshConnection();
           payload = await api.request(method, params);
         } catch(e) {
           setStatus('error', e.message || `平仓失败`);
@@ -2490,6 +2623,19 @@ function closeSettings() {
   settingsModal.classList.remove('open');
 }
 
+async function restoreConnectionIfNeeded(reason) {
+  if (!state.clientId || !state.clientSecret) return;
+  if (api.connected && api.authenticated && api.ws && api.ws.readyState === WebSocket.OPEN) return;
+  try {
+    setStatus('info', reason || '正在检查连接...');
+    await api.ensureConnected();
+    _activeSubscriptions = [];
+    await loadData();
+  } catch(e) {
+    setStatus('error', `连接恢复失败: ${e.message}`);
+  }
+}
+
 openSettingsBtn.onclick = openSettings;
 closeSettingsBtn.onclick = closeSettings;
 
@@ -2523,6 +2669,14 @@ window.addEventListener('load', async () => {
     } catch(e) {
       openSettings();
     }
+  }
+});
+
+window.addEventListener('focus', () => restoreConnectionIfNeeded('页面恢复，正在检查连接...'));
+window.addEventListener('online', () => restoreConnectionIfNeeded('网络恢复，正在重新连接...'));
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    restoreConnectionIfNeeded('页面恢复，正在检查连接...');
   }
 });
 
