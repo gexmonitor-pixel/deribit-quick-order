@@ -36,7 +36,7 @@
 
 ## 🎁 福利与社区
 
-- **手续费减免**：使用我们的 [专属邀请链接](https://www.deribit.com/action?reg=15541.6830) 注册 Deribit，可享受费率优惠。
+- **9折手续费**：使用我们的 [专属邀请链接](https://www.deribit.com/action?reg=15541.6830) 注册 Deribit，可享受 9 折手续费。
 - **加入社区**：欢迎加入我们的 [Telegram 交流群](https://t.me/Ljbp1008) 探讨期权策略，或订阅 [YouTube 频道](https://www.youtube.com/@gexmonitor) 获取实战复盘。
 - **访问主站**：想要大资金量级的期权异动和 Gamma 墙数据？欢迎访问 [GEXmonitor 主站](https://gexmonitor.com)。
 
