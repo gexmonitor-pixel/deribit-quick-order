@@ -913,7 +913,7 @@
             <div class="btn-price" id="closePriceMaker">--</div>
           </button>
           <button class="action mark_clip" id="closeBtnMark" onclick="executeClose('mark_clip')">
-            <div class="btn-title">贴标记</div>
+            <div class="btn-title">标记</div>
             <div class="btn-price" id="closePriceMark">--</div>
           </button>
           <button class="action optimal" id="closeBtnOptimal" onclick="executeClose('optimal')" style="background:var(--cyan);color:#111">
@@ -1682,7 +1682,7 @@ function renderAccountEquity(payload) {
       tradeIntentChips.innerHTML = '';
       [
         ['take_ask', '吃卖一'],
-        ['mark_clip', '贴标记'],
+        ['mark_clip', '标记'],
         ['optimal', '最优价'],
         ['join_bid', '挂买一'],
       ].forEach(([value, label]) => {
@@ -1838,6 +1838,8 @@ function renderAccountEquity(payload) {
       }
       const primaryDisplay = formatDisplay(activeRefPrice, spotPrice);
       const premiumUsd = activeRefPrice * spotPrice * amount;
+      const deltaNotionalUsd = Math.abs(Number(sideData.delta || 0)) * spotPrice * amount;
+      const leverageRatio = premiumUsd > 0 ? deltaNotionalUsd / premiumUsd : 0;
       return {
         isTaker,
         isMarkClip,
@@ -1847,7 +1849,8 @@ function renderAccountEquity(payload) {
         activeRefPrice,
         primaryDisplay,
         premiumUsd,
-        deltaNotionalUsd: Math.abs(Number(sideData.delta || 0)) * spotPrice * amount,
+        deltaNotionalUsd,
+        leverageRatio,
       };
     }
 
@@ -1900,7 +1903,7 @@ function renderAccountEquity(payload) {
       wrap.innerHTML = `
         <div class="side-name">${sideLabel}</div>
         <div class="strike">${fmtNum(strike)}</div>
-        <div class="intent">${state.executionMode === 'take_ask' ? '当前模式: 吃卖一' : (state.executionMode === 'optimal' ? '当前模式: 最优价' : (state.executionMode === 'mark_clip' ? '当前模式: 贴标记' : '当前模式: 挂买一'))}${isSelected ? ' · 已选中' : ''}</div>
+        <div class="intent">${state.executionMode === 'take_ask' ? '当前模式: 吃卖一' : (state.executionMode === 'optimal' ? '当前模式: 最优价' : (state.executionMode === 'mark_clip' ? '当前模式: 标记' : '当前模式: 挂买一'))}${isSelected ? ' · 已选中' : ''}</div>
         <div class="primary">
           <div>
             <div class="label">${state.executionMode === 'take_ask' ? '买入参考价' : (state.executionMode === 'optimal' ? '最优价' : (state.executionMode === 'mark_clip' ? '标记参考价' : '挂单参考价'))}</div>
@@ -1916,10 +1919,10 @@ function renderAccountEquity(payload) {
         </div>
         <div class="top"><span>中间价 ${midDisplay.primary}</span><span>${state.executionMode === 'take_ask' ? '立即买入' : (state.executionMode === 'optimal' ? '超买一抢单' : (state.executionMode === 'mark_clip' ? '贴近标记成交' : '排队挂买'))}</span></div>
         <div class="mid"><span>IV <strong>${fmt(sideData.iv, 1)}%</strong></span><span>Δ <strong>${fmtSigned(sideData.delta, 2)}</strong></span></div>
-        <div class="delta-note">权利金总额: ${fmtUsd(details.premiumUsd)} · 按手数 Δ 名义: ${fmtUsd(details.deltaNotionalUsd)}</div>
+        <div class="delta-note">权利金总额: ${fmtUsd(details.premiumUsd)} · 杠杆 x${fmt(details.leverageRatio, 1)} · 按手数 Δ 名义: ${fmtUsd(details.deltaNotionalUsd)}</div>
       `;
       wrap.appendChild(createActionButton(
-        state.executionMode === 'take_ask' ? '买入吃卖一' : (state.executionMode === 'optimal' ? '最优价挂单' : (state.executionMode === 'mark_clip' ? '买入贴标记' : '买入挂买一')),
+        state.executionMode === 'take_ask' ? '买入吃卖一' : (state.executionMode === 'optimal' ? '最优价挂单' : (state.executionMode === 'mark_clip' ? '买入标记' : '买入挂买一')),
         state.executionMode,
         () => submitOrder(sideData.instrument_name, 'buy', details.activeRefPrice, state.executionMode),
       ));
@@ -1976,7 +1979,7 @@ function renderAccountEquity(payload) {
     function renderTradeCards(data) {
       const snapshot = data.snapshot || {};
       const sideLabel = state.optionType === 'call' ? '看涨 Call' : '看跌 Put';
-      const modeLabel = `${state.optionType === 'call' ? '看涨' : '看跌'} / ${state.executionMode === 'take_ask' ? '吃卖一' : (state.executionMode === 'mark_clip' ? '贴标记' : '挂买一')}`;
+      const modeLabel = `${state.optionType === 'call' ? '看涨' : '看跌'} / ${state.executionMode === 'take_ask' ? '吃卖一' : (state.executionMode === 'mark_clip' ? '标记' : '挂买一')}`;
       chainTitle.textContent = `当前模式报价卡片`;
       chainMeta.textContent = `${modeLabel} | ${snapshot.time_to_expiry || '--'} | 到期 ${snapshot.expiry || '--'} | 刷新时间 ${new Date().toLocaleTimeString()}`;
       tradeCards.innerHTML = '';
@@ -2006,7 +2009,7 @@ function renderAccountEquity(payload) {
 
       if (!selected) {
         mobileSelectionTitle.textContent = '请选择一个卡片';
-        mobileSelectionMeta.textContent = `当前模式 ${state.optionType === 'call' ? '看涨' : '看跌'} / ${state.executionMode === 'take_ask' ? '吃卖一' : (state.executionMode === 'optimal' ? '最优价' : (state.executionMode === 'mark_clip' ? '贴标记' : '挂买一'))}`;
+        mobileSelectionMeta.textContent = `当前模式 ${state.optionType === 'call' ? '看涨' : '看跌'} / ${state.executionMode === 'take_ask' ? '吃卖一' : (state.executionMode === 'optimal' ? '最优价' : (state.executionMode === 'mark_clip' ? '标记' : '挂买一'))}`;
         mobileSelectionPrice.textContent = '--';
         mobileSelectionInfo.innerHTML = '';
         mobileSelectionEmpty.style.display = 'block';
@@ -2017,7 +2020,7 @@ function renderAccountEquity(payload) {
 
       const details = getSelectionDetails(selected.sideData);
       mobileSelectionTitle.textContent = selected.sideData.instrument_name;
-      mobileSelectionMeta.textContent = `${selected.strike} | ${state.executionMode === 'take_ask' ? '吃卖一' : (state.executionMode === 'optimal' ? '最优价' : (state.executionMode === 'mark_clip' ? '贴标记' : '挂买一'))} | ${state.expiry || '--'}`;
+      mobileSelectionMeta.textContent = `${selected.strike} | ${state.executionMode === 'take_ask' ? '吃卖一' : (state.executionMode === 'optimal' ? '最优价' : (state.executionMode === 'mark_clip' ? '标记' : '挂买一'))} | ${state.expiry || '--'}`;
       mobileSelectionPrice.textContent = details.primaryDisplay.primary;
       mobileSelectionEmpty.style.display = 'none';
       const spotPrice = Number((state.payload && state.payload.snapshot && state.payload.snapshot.spot_price) || 0);
@@ -2027,6 +2030,7 @@ function renderAccountEquity(payload) {
 
       mobileSelectionInfo.innerHTML = `
         <div class="info-row" style="grid-column:1/-1;flex-direction:row;justify-content:space-between;padding:8px 12px;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.2);border-radius:10px"><span>💰 权利金总额:</span> <strong style="color:#fbbf24;font-size:16px">${fmtUsd(details.premiumUsd)}</strong></div>
+        <div class="info-row"><span>杠杆:</span> <strong>x${fmt(details.leverageRatio, 1)}</strong></div>
         <div class="info-row"><span>按手数 Δ 名义:</span> <strong>${fmtUsd(details.deltaNotionalUsd)}</strong></div>
         <div class="info-row"><span>当前 IV:</span> <strong>${fmt(selected.sideData.iv, 1)}%</strong></div>
         <div class="info-row"><span>买一:</span> <strong>${bidDisplay.primary}</strong></div>
@@ -2035,7 +2039,7 @@ function renderAccountEquity(payload) {
       `;
       mobileBuyBtn.disabled = false;
       mobileBuyBtn.className = `action ${state.executionMode}`;
-      mobileBuyBtn.textContent = state.executionMode === 'take_ask' ? '买入吃卖一' : (state.executionMode === 'optimal' ? '买入最优价' : (state.executionMode === 'mark_clip' ? '买入贴标记' : '买入挂买一'));
+      mobileBuyBtn.textContent = state.executionMode === 'take_ask' ? '买入吃卖一' : (state.executionMode === 'optimal' ? '买入最优价' : (state.executionMode === 'mark_clip' ? '买入标记' : '买入挂买一'));
       
       mobileBuyBtn.onclick = () => {
         submitOrder(selected.sideData.instrument_name, 'buy', details.activeRefPrice, state.executionMode);
@@ -2303,7 +2307,7 @@ function renderAccountEquity(payload) {
       let size = Number(document.getElementById('closeModalAmount').value);
       if (isNaN(size) || size <= 0) size = closeState.maxSize;
       
-      const modeLabel = executionMode === 'taker' ? '吃单' : (executionMode === 'mark_clip' ? '贴标记' : (executionMode === 'optimal' ? '最优价' : '挂单'));
+      const modeLabel = executionMode === 'taker' ? '吃单' : (executionMode === 'mark_clip' ? '标记' : (executionMode === 'optimal' ? '最优价' : '挂单'));
       setStatus('info', `正在提交平仓委托 (${modeLabel}) ...`);
       
       const buttons = document.querySelectorAll('.close-actions button');
