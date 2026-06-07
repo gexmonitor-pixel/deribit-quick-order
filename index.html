@@ -1931,17 +1931,17 @@ function renderAccountEquity(payload) {
       const isTaker = executionMode === 'take_ask';
       const isJoin = executionMode === 'join_bid';
       
+      // Deribit Options do NOT support "market" orders.
+      // We must use "limit" and pass the crossed price (ask for buys).
       let params = {
         instrument_name: instrument,
         amount: Number(amountInput.value || state.amount || 1),
-        type: isTaker ? 'market' : 'limit',
+        type: 'limit',
         time_in_force: isTaker ? 'immediate_or_cancel' : 'good_til_cancelled',
         reduce_only: reduceOnly.checked,
+        price: price
       };
-      if (params.type === 'limit') {
-         params.price = price;
-         if (isJoin) params.post_only = true;
-      }
+      if (isJoin) params.post_only = true;
       
       try {
         const payload = await api.request(`private/${side}`, params);

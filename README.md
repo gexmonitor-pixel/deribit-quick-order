@@ -8,7 +8,7 @@
 
 - **极致速度**：0 中间件，0 后端服务器。通过 `wss://` 直连官方接口，免除 TCP/TLS 握手开销。
 - **纯前端架构**：只需一个 `index.html` 即可运行。可托管在 GitHub Pages，或下载到本地双击打开。
-- **资金绝对安全**：API Key 仅保存在浏览器本地的 `localStorage` 中。**您的私钥永远不会经过任何第三方服务器**。
+- **降低托管风险**：API Key 仅保存在浏览器本地的 `localStorage` 中。**您的私钥绝不会发送给 GEXmonitor 或任何第三方服务器，仅用于向 Deribit 官方请求鉴权**。
 - **近端 Delta 过滤**：专为末日期权设计，自动过滤无流动性合约。
 - **移动端适配**：完美的底部抽屉交互，在手机浏览器中也能实现“一键盲狙”。
 
@@ -25,7 +25,7 @@
 
 ### 方案 A：直接使用在线版（最快）
 
-代码已由 GitHub Actions 自动化部署，您无需任何配置即可直接访问：
+代码已托管在 GitHub Pages 上，您无需任何配置即可直接访问：
 👉 [https://gexmonitor-pixel.github.io/deribit-quick-order/](https://gexmonitor-pixel.github.io/deribit-quick-order/)
 
 ### 方案 B：本地运行（最硬核）
