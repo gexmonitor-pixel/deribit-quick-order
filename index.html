@@ -1200,6 +1200,7 @@ class DeribitWS {
 
   disconnect() {
     this._intentionalClose = true;
+    stopPrivateRefreshLoop();
     if (this._reconnectTimer) {
       clearTimeout(this._reconnectTimer);
       this._reconnectTimer = null;
@@ -1409,6 +1410,8 @@ let _activeSubscriptions = [];
 let _renderPending = false;
 let _lastRenderTime = 0;
 const RENDER_THROTTLE_MS = 300;
+const PRIVATE_REFRESH_INTERVAL_MS = 8000;
+let _privateRefreshTimer = null;
 
 function scheduleThrottledRender() {
   if (_renderPending) return;
@@ -1483,6 +1486,7 @@ function handleSubscriptionUpdate(channel, data) {
 let _privateRefreshPending = false;
 async function refreshPrivateData() {
   if (_privateRefreshPending || !api.authenticated) return;
+  if (document.visibilityState && document.visibilityState !== 'visible') return;
   _privateRefreshPending = true;
   try {
     const [openOrders, positions, tradeHistory] = await Promise.all([
@@ -1503,6 +1507,21 @@ async function refreshPrivateData() {
     console.error('Private data refresh failed:', e);
   } finally {
     _privateRefreshPending = false;
+  }
+}
+
+function startPrivateRefreshLoop() {
+  if (_privateRefreshTimer) clearInterval(_privateRefreshTimer);
+  _privateRefreshTimer = setInterval(() => {
+    if (!state.payload || !api.authenticated) return;
+    refreshPrivateData();
+  }, PRIVATE_REFRESH_INTERVAL_MS);
+}
+
+function stopPrivateRefreshLoop() {
+  if (_privateRefreshTimer) {
+    clearInterval(_privateRefreshTimer);
+    _privateRefreshTimer = null;
   }
 }
 
@@ -1577,6 +1596,7 @@ async function loadData() {
 
     // Establish real-time WebSocket subscriptions
     await setupSubscriptions();
+    startPrivateRefreshLoop();
 
     const pExpiry = (payload && payload.snapshot && payload.snapshot.expiry) || '--';
     setStatus('info', `已加载 ${pExpiry}，实时推送已建立 ✓`);
@@ -2625,7 +2645,10 @@ function closeSettings() {
 
 async function restoreConnectionIfNeeded(reason) {
   if (!state.clientId || !state.clientSecret) return;
-  if (api.connected && api.authenticated && api.ws && api.ws.readyState === WebSocket.OPEN) return;
+  if (api.connected && api.authenticated && api.ws && api.ws.readyState === WebSocket.OPEN) {
+    await refreshPrivateData();
+    return;
+  }
   try {
     setStatus('info', reason || '正在检查连接...');
     await api.ensureConnected();
